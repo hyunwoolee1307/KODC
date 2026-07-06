@@ -6,5 +6,21 @@ platforms = ["linux-64"]
 version = "0.1.0"
 
 [tasks]
+download = "PYTHONPATH=src python -m kodc.cli download"
+convert = "PYTHONPATH=src python -m kodc.cli convert"
+analyze = "PYTHONPATH=src python -m kodc.cli analyze"
+reproduce = "PYTHONPATH=src python -m kodc.cli reproduce"
+test = "PYTHONPATH=src pytest"
+lint = "ruff check src tests"
 
 [dependencies]
+python = ">=3.12,<3.13"
+requests = ">=2.32"
+pandas = ">=2.2"
+numpy = ">=2.0"
+scipy = ">=1.14"
+eofs = ">=2.0"
+pytest = ">=8.0"
+ruff = ">=0.6"
+notebook = ">=7.0"
+ipykernel = ">=6.29"

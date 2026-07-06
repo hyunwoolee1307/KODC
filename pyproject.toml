@@ -1,0 +1,17 @@
+[project]
+name = "kodc-reproducibility"
+version = "0.1.0"
+description = "Reproducible KODC processing and EOF analysis workflow."
+requires-python = ">=3.12"
+license = "MIT"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]

@@ -1,0 +1,9 @@
+{
+  "header": {
+    "resultCode": "00",
+    "resultMsg": "success"
+  },
+  "body": {
+    "item": []
+  }
+}
