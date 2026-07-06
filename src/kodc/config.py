@@ -10,12 +10,17 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR = PROJECT_ROOT / "data"
 RAW_DATA_DIR = DATA_DIR / "raw"
 INTERIM_DATA_DIR = DATA_DIR / "interim"
+STATION_CODE_CSV = INTERIM_DATA_DIR / "station_codes.csv"
 OUTPUT_TABLE_DIR = PROJECT_ROOT / "outputs" / "tables"
 OUTPUT_FIGURE_DIR = PROJECT_ROOT / "outputs" / "figures"
 
 NIFS_API_URL = "https://www.nifs.go.kr/OpenAPI_json"
 NIFS_API_ID = "sooList"
+NIFS_STATION_API_ID = "sooCode"
 NIFS_API_KEY_ENV = "NIFS_API_KEY"
+NIFS_API_KEY_FILE_ENV = "NIFS_API_KEY_FILE"
+NIFS_API_KEY_FILE = PROJECT_ROOT / "NIFS_API_KEY"
+NIFS_REGION_CODES = ("E", "W", "S", "EC")
 
 DEFAULT_START_YEAR = 1961
 DEFAULT_END_YEAR = 2025
@@ -66,14 +71,40 @@ COLUMN_ALIASES = {
     "Water Temp(°C)": "wtr_tmp",
 }
 
+STATION_COLUMN_ALIASES = {
+    "Line": "sln_cde",
+    "Station": "sta_cde",
+    "Latitude": "lat",
+    "Longitude": "lon",
+    "Bottom Depth(m)": "bot_dep",
+    "Bottom depth(m)": "bot_dep",
+    "bottom_depth": "bot_dep",
+    "bottom_depth_m": "bot_dep",
+    "btm_dep": "bot_dep",
+    "max_depth": "bot_dep",
+}
 
-def get_api_key(env: Mapping[str, str] | None = None) -> str:
-    """Return the NIFS API key from the environment."""
+
+def get_api_key(
+    env: Mapping[str, str] | None = None,
+    *,
+    key_file: Path | None = None,
+) -> str:
+    """Return the NIFS API key from the environment or a local key file."""
 
     values = os.environ if env is None else env
     key = values.get(NIFS_API_KEY_ENV, "").strip()
-    if not key:
-        raise RuntimeError(
-            f"{NIFS_API_KEY_ENV} is not set. Export it before running the download task."
-        )
-    return key
+    if key:
+        return key
+
+    configured_file = values.get(NIFS_API_KEY_FILE_ENV, "").strip()
+    path = Path(configured_file).expanduser() if configured_file else key_file or NIFS_API_KEY_FILE
+    if path.exists():
+        file_key = path.read_text(encoding="utf-8").strip()
+        if file_key and not file_key.startswith("replace-with-"):
+            return file_key
+
+    raise RuntimeError(
+        f"{NIFS_API_KEY_ENV} is not set and no usable API key was found in {path}. "
+        f"Export {NIFS_API_KEY_ENV} or create a local {NIFS_API_KEY_FILE.name} file."
+    )

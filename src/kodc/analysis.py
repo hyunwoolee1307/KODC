@@ -21,7 +21,9 @@ from .config import (
     INTERIM_DATA_DIR,
     OUTPUT_TABLE_DIR,
     STANDARD_DEPTHS,
+    STATION_CODE_CSV,
 )
+from .metadata import read_station_metadata
 from .preprocess import normalize_columns, process_anomaly_with_filter, read_kodc_csvs
 
 
@@ -77,6 +79,7 @@ def write_analysis_tables(
     min_observations: int = DEFAULT_MIN_OBSERVATIONS,
     n_modes: int = DEFAULT_EOF_MODES,
     standard_depths: Iterable[int] = STANDARD_DEPTHS,
+    station_metadata_path: Path | None = STATION_CODE_CSV,
     freq_months: int = DEFAULT_FREQ_MONTHS,
     sample_day: int = DEFAULT_SAMPLE_DAY,
 ) -> AnalysisOutputs:
@@ -86,6 +89,9 @@ def write_analysis_tables(
     line_data = dataframe.loc[dataframe["sln_cde"] == line]
     if line_data.empty:
         raise ValueError(f"No observations found for line {line}.")
+    station_metadata = None
+    if station_metadata_path is not None and station_metadata_path.exists():
+        station_metadata = read_station_metadata(station_metadata_path)
 
     all_result = process_anomaly_with_filter(
         dataframe,
@@ -95,6 +101,7 @@ def write_analysis_tables(
         baseline_end=baseline_end,
         min_observations=min_observations,
         standard_depths=standard_depths,
+        station_metadata=station_metadata,
         freq_months=freq_months,
         sample_day=sample_day,
     )
@@ -106,6 +113,7 @@ def write_analysis_tables(
         baseline_end=baseline_end,
         min_observations=min_observations,
         standard_depths=standard_depths,
+        station_metadata=station_metadata,
         freq_months=freq_months,
         sample_day=sample_day,
     )

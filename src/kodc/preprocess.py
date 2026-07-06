@@ -72,6 +72,34 @@ def _mode_or_nan(series: pd.Series) -> float:
     return float(mode.iloc[0])
 
 
+def _metadata_lookup(station_metadata: pd.DataFrame | None) -> dict[tuple[int, int], float]:
+    if station_metadata is None or station_metadata.empty:
+        return {}
+
+    metadata = station_metadata.copy()
+    metadata["sln_cde"] = pd.to_numeric(metadata["sln_cde"], errors="coerce")
+    metadata["sta_cde"] = pd.to_numeric(metadata["sta_cde"], errors="coerce")
+    metadata["max_depth_m"] = pd.to_numeric(metadata["max_depth_m"], errors="coerce")
+    metadata = metadata.dropna(subset=["sln_cde", "sta_cde", "max_depth_m"])
+    return {
+        (int(row.sln_cde), int(row.sta_cde)): float(row.max_depth_m)
+        for row in metadata.itertuples(index=False)
+    }
+
+
+def _station_depth_limit(
+    *,
+    line: float,
+    station: float,
+    observed_max_depth: float,
+    station_depths: dict[tuple[int, int], float],
+) -> tuple[float, float]:
+    metadata_depth = station_depths.get((int(line), int(station)), float("nan"))
+    if np.isfinite(metadata_depth) and metadata_depth >= 0:
+        return min(float(observed_max_depth), metadata_depth), metadata_depth
+    return float(observed_max_depth), float(observed_max_depth)
+
+
 def _interpolate_profiles(
     group: pd.DataFrame,
     time_index: Iterable[pd.Timestamp],
@@ -134,6 +162,7 @@ def process_anomaly_with_filter(
     baseline_end: str,
     min_observations: int,
     standard_depths: Iterable[int] = STANDARD_DEPTHS,
+    station_metadata: pd.DataFrame | None = None,
     freq_months: int = 2,
     sample_day: int = 15,
     fill_value: float = 0.0,
@@ -156,6 +185,7 @@ def process_anomaly_with_filter(
         raise ValueError("The requested analysis time index is empty.")
 
     depths = np.asarray(tuple(standard_depths), dtype=float)
+    station_depths = _metadata_lookup(station_metadata)
     all_series: list[pd.Series] = []
     metadata_rows: list[dict] = []
 
@@ -164,8 +194,14 @@ def process_anomaly_with_filter(
         if n_valid_dates < min_observations:
             continue
 
-        max_depth = group["wtr_dep"].max()
-        interp_depths = depths[depths <= max_depth]
+        observed_max_depth = float(group["wtr_dep"].max())
+        depth_limit, station_max_depth = _station_depth_limit(
+            line=line,
+            station=station,
+            observed_max_depth=observed_max_depth,
+            station_depths=station_depths,
+        )
+        interp_depths = depths[depths <= depth_limit]
         if len(interp_depths) == 0:
             continue
 
@@ -200,6 +236,8 @@ def process_anomaly_with_filter(
                     "lat": lat,
                     "lon": lon,
                     "depth_m": depth_int,
+                    "max_depth_m": station_max_depth,
+                    "observed_max_depth_m": observed_max_depth,
                     "n_observation_dates": int(n_valid_dates),
                 }
             )

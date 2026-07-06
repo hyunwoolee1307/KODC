@@ -8,10 +8,17 @@ small and reproducible.
 ## Quick Start
 
 1. Install [Pixi](https://pixi.sh/).
-2. Set your NIFS OpenAPI key:
+2. Set your NIFS OpenAPI key with either an environment variable:
 
    ```bash
    export NIFS_API_KEY="your-api-key"
+   ```
+
+   Or store it in a local file that is ignored by Git:
+
+   ```bash
+   cp NIFS_API_KEY.example NIFS_API_KEY
+   # edit NIFS_API_KEY and replace the placeholder with your issued key
    ```
 
 3. Download raw yearly JSON files:
@@ -26,13 +33,19 @@ small and reproducible.
    pixi run convert
    ```
 
-5. Generate the official analysis tables:
+5. Download station metadata from the `sooCode` endpoint:
+
+   ```bash
+   pixi run download-metadata -- --regions E W S EC
+   ```
+
+6. Generate the official analysis tables:
 
    ```bash
    pixi run analyze -- --line 208 --start-date 1982-01-01 --end-date 2025-12-31 --min-observations 240
    ```
 
-6. Generate optional PC lead-lag composite figures:
+7. Generate optional PC lead-lag composite figures:
 
    ```bash
    pixi run visualize -- --line 208 --lags -2 -4 -6 -12 0 2 4 6 12
@@ -55,14 +68,19 @@ The official generated tables are written to `outputs/tables/`:
 - `line208_variance.csv`
 
 Optional figures are written to `outputs/figures/`. The visualization command
-draws lon-lat triangulated contour maps, masks long triangle edges to avoid
-spatial jumps, highlights Line 208 in each map, and creates PC lead-lag
-composite maps for the requested month offsets.
+draws lon-lat triangulated contour maps on a Cartopy `PlateCarree` map, adds
+coastlines, uses one fixed map extent across generated figures, masks long
+triangle edges to avoid spatial jumps, highlights Line 208 in each map, and
+creates PC lead-lag composite maps for the requested month offsets. Station
+metadata from `sooCode` is used during preprocessing so interpolation depths do
+not exceed each station's reported bottom depth (`bot_dep`).
 
 ## Data Provenance
 
 The download step queries the NIFS OpenAPI endpoint with `id=sooList` and yearly
-date windows. The API key is read from the `NIFS_API_KEY` environment variable.
+date windows. Station metadata are queried with `id=sooCode` for the region codes
+`E`, `W`, `S`, and `EC`. The API key is read from the `NIFS_API_KEY`
+environment variable first, then from a local `NIFS_API_KEY` file if present.
 Do not commit real API keys, raw JSON files, converted CSV files, or generated
 analysis outputs.
 

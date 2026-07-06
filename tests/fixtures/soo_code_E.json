@@ -1,0 +1,32 @@
+{
+  "header": {
+    "resultCode": "00",
+    "resultMsg": "success"
+  },
+  "body": {
+    "item": [
+      {
+        "gru_nam": "동해",
+        "sln_cde": "208",
+        "sta_cde": "01",
+        "bld_dat": "19820101",
+        "end_dat": null,
+        "lat": "35.0",
+        "lon": "129.0",
+        "zoo_dep": "50",
+        "bot_dep": "0"
+      },
+      {
+        "gru_nam": "동해",
+        "sln_cde": "208",
+        "sta_cde": "02",
+        "bld_dat": "19820101",
+        "end_dat": null,
+        "lat": "35.5",
+        "lon": "130.0",
+        "zoo_dep": "50",
+        "bot_dep": "10"
+      }
+    ]
+  }
+}

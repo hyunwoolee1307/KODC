@@ -9,6 +9,7 @@ __pycache__/
 
 # Local secrets
 .env
+/NIFS_API_KEY
 
 # Generated data and analysis products
 data/**

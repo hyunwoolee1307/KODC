@@ -108,7 +108,7 @@ def _format_lag_for_filename(lag_months: int) -> str:
     return "p00"
 
 
-def _prepare_pyplot() -> tuple[Any, Any]:
+def _prepare_pyplot() -> tuple[Any, Any, Any, Any]:
     mplconfigdir = Path(os.environ.get("MPLCONFIGDIR", "/tmp/kodc-matplotlib"))
     mplconfigdir.mkdir(parents=True, exist_ok=True)
     os.environ.setdefault("MPLCONFIGDIR", str(mplconfigdir))
@@ -116,10 +116,12 @@ def _prepare_pyplot() -> tuple[Any, Any]:
     import matplotlib
 
     matplotlib.use("Agg", force=True)
+    import cartopy.crs as ccrs
+    import cartopy.feature as cfeature
     import matplotlib.pyplot as plt
     import matplotlib.tri as mtri
 
-    return plt, mtri
+    return plt, mtri, ccrs, cfeature
 
 
 def _station_locations(metadata: pd.DataFrame) -> pd.DataFrame:
@@ -138,6 +140,11 @@ def _prepare_depth_values(
     depth: int,
 ) -> pd.DataFrame:
     depth_meta = metadata.loc[metadata["depth_m"] == depth].copy()
+    if "max_depth_m" in depth_meta.columns:
+        depth_meta["max_depth_m"] = pd.to_numeric(depth_meta["max_depth_m"], errors="coerce")
+        depth_meta = depth_meta.loc[
+            depth_meta["max_depth_m"].isna() | (depth_meta["max_depth_m"] >= depth)
+        ]
     depth_meta["value"] = composite.reindex(depth_meta["column"]).to_numpy()
     return depth_meta.dropna(subset=["lon", "lat", "value"])
 
@@ -220,13 +227,20 @@ def _triangulate_lon_lat(
     return triangulation
 
 
-def _plot_line_network(ax: Any, metadata: pd.DataFrame, *, line: int) -> None:
+def _plot_line_network(ax: Any, metadata: pd.DataFrame, *, line: int, transform: Any) -> None:
     for current_line, group in _station_locations(metadata).groupby("sln_cde", sort=True):
         clean = group.sort_values("sta_cde")
         if len(clean) < 2:
             continue
         if int(current_line) == line:
-            ax.plot(clean["lon"], clean["lat"], color="#111111", linewidth=2.6, zorder=5)
+            ax.plot(
+                clean["lon"],
+                clean["lat"],
+                color="#111111",
+                linewidth=2.6,
+                transform=transform,
+                zorder=5,
+            )
             ax.scatter(
                 clean["lon"],
                 clean["lat"],
@@ -234,12 +248,29 @@ def _plot_line_network(ax: Any, metadata: pd.DataFrame, *, line: int) -> None:
                 facecolor="#ffcf33",
                 edgecolor="#111111",
                 linewidth=0.8,
+                transform=transform,
                 zorder=6,
                 label=f"Line {line}",
             )
         else:
-            ax.plot(clean["lon"], clean["lat"], color="#8a8a8a", linewidth=0.8, alpha=0.6, zorder=3)
-            ax.scatter(clean["lon"], clean["lat"], s=10, color="#666666", alpha=0.5, zorder=4)
+            ax.plot(
+                clean["lon"],
+                clean["lat"],
+                color="#8a8a8a",
+                linewidth=0.8,
+                alpha=0.6,
+                transform=transform,
+                zorder=3,
+            )
+            ax.scatter(
+                clean["lon"],
+                clean["lat"],
+                s=10,
+                color="#666666",
+                alpha=0.5,
+                transform=transform,
+                zorder=4,
+            )
 
 
 def _plot_pc_panel(
@@ -265,16 +296,29 @@ def _plot_pc_panel(
     ax.grid(True, linewidth=0.4, alpha=0.3)
 
 
-def _set_lon_lat_extent(ax: Any, depth_values: pd.DataFrame) -> None:
-    lon_range = depth_values["lon"].max() - depth_values["lon"].min()
-    lat_range = depth_values["lat"].max() - depth_values["lat"].min()
+def _map_extent(metadata: pd.DataFrame) -> tuple[float, float, float, float]:
+    stations = _station_locations(metadata)
+    lon_range = stations["lon"].max() - stations["lon"].min()
+    lat_range = stations["lat"].max() - stations["lat"].min()
     lon_margin = max(lon_range * 0.04, 0.05)
     lat_margin = max(lat_range * 0.04, 0.05)
-    ax.set_xlim(depth_values["lon"].min() - lon_margin, depth_values["lon"].max() + lon_margin)
-    ax.set_ylim(depth_values["lat"].min() - lat_margin, depth_values["lat"].max() + lat_margin)
+    return (
+        float(stations["lon"].min() - lon_margin),
+        float(stations["lon"].max() + lon_margin),
+        float(stations["lat"].min() - lat_margin),
+        float(stations["lat"].max() + lat_margin),
+    )
 
-    mean_lat = np.radians(depth_values["lat"].mean())
-    ax.set_aspect(1.0 / max(np.cos(mean_lat), 0.2), adjustable="box")
+
+def _add_cartopy_features(ax: Any, cfeature: Any) -> None:
+    try:
+        ax.add_feature(cfeature.LAND, facecolor="#eeeeee", edgecolor="none", zorder=0)
+        ax.coastlines(resolution="10m", linewidth=0.7, color="#333333", zorder=2)
+    except Exception:
+        try:
+            ax.coastlines(resolution="110m", linewidth=0.7, color="#333333", zorder=2)
+        except Exception:
+            return
 
 
 def plot_composite_map(
@@ -289,10 +333,12 @@ def plot_composite_map(
     threshold: float,
     output_path: Path,
     max_edge_km: float | None = None,
+    extent: tuple[float, float, float, float] | None = None,
 ) -> Path:
     """Write one PC lead-lag composite map in lon-lat coordinates."""
 
-    plt, mtri = _prepare_pyplot()
+    plt, mtri, ccrs, cfeature = _prepare_pyplot()
+    projection = ccrs.PlateCarree()
     depth_values = _prepare_depth_values(composite, metadata, depth=depth)
     triangulation = _triangulate_lon_lat(mtri, depth_values, max_edge_km=max_edge_km)
     values = depth_values["value"].to_numpy(dtype=float)
@@ -303,14 +349,12 @@ def plot_composite_map(
     levels = np.linspace(-max_abs, max_abs, 21)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    fig, (ax_pc, ax_map) = plt.subplots(
-        2,
-        1,
-        figsize=(7.6, 8.4),
-        gridspec_kw={"height_ratios": [1.0, 3.0]},
-        layout="constrained",
-    )
+    fig = plt.figure(figsize=(7.6, 8.4), layout="constrained")
+    gs = fig.add_gridspec(2, 1, height_ratios=[1.0, 3.0])
+    ax_pc = fig.add_subplot(gs[0, 0])
+    ax_map = fig.add_subplot(gs[1, 0], projection=projection)
     _plot_pc_panel(ax_pc, pc_standardized, lag_months=lag_months, threshold=threshold)
+    _add_cartopy_features(ax_map, cfeature)
 
     mesh = ax_map.tricontourf(
         triangulation,
@@ -320,9 +364,11 @@ def plot_composite_map(
         vmin=-max_abs,
         vmax=max_abs,
         extend="both",
+        transform=projection,
+        zorder=1,
     )
-    _plot_line_network(ax_map, metadata, line=line)
-    _set_lon_lat_extent(ax_map, depth_values)
+    _plot_line_network(ax_map, metadata, line=line, transform=projection)
+    ax_map.set_extent(extent or _map_extent(metadata), crs=projection)
     ax_map.set_title(
         f"Mode {mode} composite anomaly | depth {depth} m{format_lag_for_title(lag_months)}"
     )
@@ -346,10 +392,12 @@ def write_visualizations(
     lag_months: Iterable[int] = DEFAULT_LEAD_LAG_MONTHS,
     threshold: float = 1.0,
     max_edge_km: float | None = None,
+    extent: tuple[float, float, float, float] | None = None,
 ) -> VisualizationOutputs:
     """Create PC lead-lag composite maps from analysis tables."""
 
     anomalies, metadata, pcs = read_analysis_tables(table_dir=table_dir, line=line)
+    map_extent = extent or _map_extent(metadata)
     selected_modes = tuple(modes) if modes is not None else tuple(
         int(column.removeprefix("PC")) for column in pcs.columns if column.startswith("PC")
     )
@@ -390,6 +438,7 @@ def write_visualizations(
                             threshold=threshold,
                             output_path=output_path,
                             max_edge_km=max_edge_km,
+                            extent=map_extent,
                         )
                     )
                 except ValueError as exc:

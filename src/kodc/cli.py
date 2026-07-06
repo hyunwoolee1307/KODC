@@ -19,13 +19,16 @@ from .config import (
     DEFAULT_START_DATE,
     DEFAULT_START_YEAR,
     INTERIM_DATA_DIR,
+    NIFS_REGION_CODES,
     OUTPUT_FIGURE_DIR,
     OUTPUT_TABLE_DIR,
     RAW_DATA_DIR,
+    STATION_CODE_CSV,
     get_api_key,
 )
 from .convert import convert_json_directory
 from .download import download_years
+from .metadata import download_station_code_payloads, write_station_metadata_csv
 
 
 def _year_range(start_year: int, end_year: int) -> range:
@@ -66,9 +69,25 @@ def run_analyze(args: argparse.Namespace) -> int:
         baseline_end=args.baseline_end,
         min_observations=args.min_observations,
         n_modes=args.modes,
+        station_metadata_path=args.station_metadata,
     )
     for name, path in outputs.paths.items():
         print(f"{name}: {path}")
+    return 0
+
+
+def run_download_metadata(args: argparse.Namespace) -> int:
+    paths = download_station_code_payloads(
+        api_key=get_api_key(),
+        output_dir=args.raw_dir,
+        region_codes=tuple(args.regions),
+        overwrite=args.overwrite,
+        timeout=args.timeout,
+    )
+    output_path = write_station_metadata_csv(input_paths=paths, output_path=args.output_path)
+    for path in paths:
+        print(f"metadata raw: {path}")
+    print(f"metadata csv: {output_path}")
     return 0
 
 
@@ -101,6 +120,17 @@ def run_reproduce(args: argparse.Namespace) -> int:
         timeout=args.timeout,
     )
     convert_json_directory(input_dir=args.raw_dir, output_dir=args.interim_dir)
+    metadata_paths = download_station_code_payloads(
+        api_key=get_api_key(),
+        output_dir=args.raw_dir,
+        region_codes=tuple(args.regions),
+        overwrite=args.overwrite,
+        timeout=args.timeout,
+    )
+    station_metadata_path = write_station_metadata_csv(
+        input_paths=metadata_paths,
+        output_path=args.station_metadata,
+    )
     outputs = write_analysis_tables(
         input_dir=args.interim_dir,
         output_dir=args.output_dir,
@@ -111,6 +141,7 @@ def run_reproduce(args: argparse.Namespace) -> int:
         baseline_end=args.baseline_end,
         min_observations=args.min_observations,
         n_modes=args.modes,
+        station_metadata_path=station_metadata_path,
     )
     for name, path in outputs.paths.items():
         print(f"{name}: {path}")
@@ -134,6 +165,17 @@ def build_parser() -> argparse.ArgumentParser:
     convert.add_argument("--output-dir", type=Path, default=INTERIM_DATA_DIR)
     convert.set_defaults(func=run_convert)
 
+    metadata = subparsers.add_parser(
+        "download-metadata",
+        help="Download NIFS sooCode station metadata.",
+    )
+    metadata.add_argument("--raw-dir", type=Path, default=RAW_DATA_DIR)
+    metadata.add_argument("--output-path", type=Path, default=STATION_CODE_CSV)
+    metadata.add_argument("--regions", nargs="+", default=NIFS_REGION_CODES)
+    metadata.add_argument("--overwrite", action="store_true")
+    metadata.add_argument("--timeout", type=float, default=60.0)
+    metadata.set_defaults(func=run_download_metadata)
+
     analyze = subparsers.add_parser("analyze", help="Generate official EOF analysis tables.")
     add_analysis_arguments(analyze, input_arg="--input-dir")
     analyze.set_defaults(func=run_analyze)
@@ -154,6 +196,7 @@ def build_parser() -> argparse.ArgumentParser:
     reproduce.add_argument("--end-year", type=int, default=DEFAULT_END_YEAR)
     reproduce.add_argument("--raw-dir", type=Path, default=RAW_DATA_DIR)
     reproduce.add_argument("--interim-dir", type=Path, default=INTERIM_DATA_DIR)
+    reproduce.add_argument("--regions", nargs="+", default=NIFS_REGION_CODES)
     reproduce.add_argument("--overwrite", action="store_true")
     reproduce.add_argument("--timeout", type=float, default=60.0)
     add_analysis_arguments(reproduce, input_arg=None)
@@ -172,6 +215,7 @@ def add_analysis_arguments(parser: argparse.ArgumentParser, *, input_arg: str | 
     parser.add_argument("--baseline-end", default=DEFAULT_BASELINE_END)
     parser.add_argument("--min-observations", type=int, default=DEFAULT_MIN_OBSERVATIONS)
     parser.add_argument("--modes", type=int, default=DEFAULT_EOF_MODES)
+    parser.add_argument("--station-metadata", type=Path, default=STATION_CODE_CSV)
 
 
 def main(argv: Sequence[str] | None = None) -> int:

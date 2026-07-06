@@ -36,6 +36,38 @@ def test_process_anomaly_with_filter_interpolates_and_filters() -> None:
     )
 
 
+def test_process_anomaly_with_filter_caps_depths_with_station_metadata() -> None:
+    station_metadata = pd.DataFrame(
+        {
+            "sln_cde": [208, 208],
+            "sta_cde": [1, 2],
+            "lat": [35.0, 35.5],
+            "lon": [129.0, 130.0],
+            "max_depth_m": [0, 10],
+        }
+    )
+
+    result = process_anomaly_with_filter(
+        _synthetic_dataframe(),
+        start_date="2000-01-01",
+        end_date="2001-03-31",
+        baseline_start="2000-01-01",
+        baseline_end="2001-12-31",
+        min_observations=4,
+        standard_depths=(0, 10),
+        station_metadata=station_metadata,
+    )
+
+    assert "Sln208_Sta1_0m" in result.anomalies.columns
+    assert "Sln208_Sta1_10m" not in result.anomalies.columns
+    assert "max_depth_m" in result.metadata.columns
+    station_1_depths = result.metadata.loc[
+        result.metadata["sta_cde"] == 1,
+        "max_depth_m",
+    ].unique()
+    assert station_1_depths.tolist() == [0.0]
+
+
 def test_process_anomaly_with_filter_rejects_under_sampled_stations() -> None:
     with pytest.raises(ValueError, match="No stations satisfied"):
         process_anomaly_with_filter(
