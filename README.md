@@ -32,6 +32,12 @@ small and reproducible.
    pixi run analyze -- --line 208 --start-date 1982-01-01 --end-date 2025-12-31 --min-observations 240
    ```
 
+6. Generate optional PC lead-lag composite figures:
+
+   ```bash
+   pixi run visualize -- --line 208 --lags -2 -4 -6 -12 0 2 4 6 12
+   ```
+
 The same default workflow can be run end-to-end with:
 
 ```bash
@@ -48,8 +54,10 @@ The official generated tables are written to `outputs/tables/`:
 - `line208_pcs.csv`
 - `line208_variance.csv`
 
-Generated figures are not part of the official reproducibility target. Optional
-notebooks may read the generated tables for exploratory plotting.
+Optional figures are written to `outputs/figures/`. The visualization command
+draws lon-lat triangulated contour maps, masks long triangle edges to avoid
+spatial jumps, highlights Line 208 in each map, and creates PC lead-lag
+composite maps for the requested month offsets.
 
 ## Data Provenance
 

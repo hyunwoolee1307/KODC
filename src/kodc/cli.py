@@ -13,11 +13,13 @@ from .config import (
     DEFAULT_END_DATE,
     DEFAULT_END_YEAR,
     DEFAULT_EOF_MODES,
+    DEFAULT_LEAD_LAG_MONTHS,
     DEFAULT_LINE,
     DEFAULT_MIN_OBSERVATIONS,
     DEFAULT_START_DATE,
     DEFAULT_START_YEAR,
     INTERIM_DATA_DIR,
+    OUTPUT_FIGURE_DIR,
     OUTPUT_TABLE_DIR,
     RAW_DATA_DIR,
     get_api_key,
@@ -70,6 +72,26 @@ def run_analyze(args: argparse.Namespace) -> int:
     return 0
 
 
+def run_visualize(args: argparse.Namespace) -> int:
+    from .visualize import write_visualizations
+
+    outputs = write_visualizations(
+        table_dir=args.table_dir,
+        output_dir=args.output_dir,
+        line=args.line,
+        modes=args.modes,
+        depths=args.depths,
+        lag_months=args.lags,
+        threshold=args.threshold,
+        max_edge_km=args.max_edge_km,
+    )
+    for path in outputs.paths:
+        print(f"figure: {path}")
+    for skipped in outputs.skipped:
+        print(f"skipped: {skipped}")
+    return 0
+
+
 def run_reproduce(args: argparse.Namespace) -> int:
     download_years(
         api_key=get_api_key(),
@@ -115,6 +137,17 @@ def build_parser() -> argparse.ArgumentParser:
     analyze = subparsers.add_parser("analyze", help="Generate official EOF analysis tables.")
     add_analysis_arguments(analyze, input_arg="--input-dir")
     analyze.set_defaults(func=run_analyze)
+
+    visualize = subparsers.add_parser("visualize", help="Generate PC lead-lag composite figures.")
+    visualize.add_argument("--table-dir", type=Path, default=OUTPUT_TABLE_DIR)
+    visualize.add_argument("--output-dir", type=Path, default=OUTPUT_FIGURE_DIR)
+    visualize.add_argument("--line", type=int, default=DEFAULT_LINE)
+    visualize.add_argument("--modes", type=int, nargs="+", default=None)
+    visualize.add_argument("--depths", type=int, nargs="+", default=None)
+    visualize.add_argument("--lags", type=int, nargs="+", default=DEFAULT_LEAD_LAG_MONTHS)
+    visualize.add_argument("--threshold", type=float, default=1.0)
+    visualize.add_argument("--max-edge-km", type=float, default=None)
+    visualize.set_defaults(func=run_visualize)
 
     reproduce = subparsers.add_parser("reproduce", help="Run download, convert, and analyze.")
     reproduce.add_argument("--start-year", type=int, default=DEFAULT_START_YEAR)

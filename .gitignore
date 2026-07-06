@@ -23,6 +23,8 @@ outputs/**
 !outputs/README.md
 !outputs/tables/
 !outputs/tables/.gitkeep
+!outputs/figures/
+!outputs/figures/.gitkeep
 
 # Notebook/editor artifacts
 .ipynb_checkpoints/
