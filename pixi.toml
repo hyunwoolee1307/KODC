@@ -1,0 +1,10 @@
+[workspace]
+authors = ["Hyunwoo Lee <hyunwoolee1307@kiost.ac.kr>"]
+channels = ["conda-forge"]
+name = "KODC"
+platforms = ["linux-64"]
+version = "0.1.0"
+
+[tasks]
+
+[dependencies]
